@@ -4,6 +4,7 @@ import android.app.Service;
 import android.content.Intent;
 import android.location.Location;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 import android.widget.Toast;
@@ -20,7 +21,7 @@ import com.google.android.gms.location.LocationServices;
 public class LocationServiceManager extends Service implements
 		LocationListener, ConnectionCallbacks, OnConnectionFailedListener {
 
-	private static final String TAG = "app";
+	public static final String TAG = "app";
 
 	private Location mLastLocation;
 
@@ -32,7 +33,11 @@ public class LocationServiceManager extends Service implements
 
 	private static int UPDATE_INTERVAL = 5000; // 5 sec
 	private static int FATEST_INTERVAL = 2500; // 2.5 sec
-	private static int DISPLACEMENT = 0; // in meters
+	private static int DISPLACEMENT = 1; // in meters
+	double lat, lng;
+
+	private final Handler handler = new Handler();
+	private Intent i;
 
 	@Override
 	public IBinder onBind(Intent intent) {
@@ -41,12 +46,22 @@ public class LocationServiceManager extends Service implements
 	}
 
 	@Override
+	public void onCreate() {
+		// TODO Auto-generated method stub
+		super.onCreate();
+
+		handler.removeCallbacks(sendUpdatesToUI);
+		handler.postDelayed(sendUpdatesToUI, 1000);
+
+	}
+
+	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 
 		if (checkPlayServices()) {
 			buildGoogleApiClient();
 			createLocationRequest();
-
+			i = new Intent(TAG);
 			if (mGoogleApiClient != null) {
 				mGoogleApiClient.connect();
 				displayLocation();
@@ -64,6 +79,8 @@ public class LocationServiceManager extends Service implements
 			double latitude = mLastLocation.getLatitude();
 			double longitude = mLastLocation.getLongitude();
 
+			this.lat = latitude;
+			this.lng = longitude;
 			Toast.makeText(getApplicationContext(),
 					latitude + ", " + longitude, 500).show();
 			togglePeriodicLocationUpdates();
@@ -162,11 +179,31 @@ public class LocationServiceManager extends Service implements
 	@Override
 	public void onDestroy() {
 		super.onDestroy();
-		Toast.makeText(getApplicationContext(), "Stopped", 500).show();
 		if (mGoogleApiClient.isConnected()) {
 			stopLocationUpdates();
 			mGoogleApiClient.disconnect();
 		}
+		handler.removeCallbacks(sendUpdatesToUI);
+
+	}
+
+	@Override
+	public void onStart(Intent intent, int startId) {
+		handler.removeCallbacks(sendUpdatesToUI);
+		handler.postDelayed(sendUpdatesToUI, 1000);
+	}
+
+	private Runnable sendUpdatesToUI = new Runnable() {
+		public void run() {
+			displayLatLng();
+			handler.postDelayed(this, 1000); // 1 seconds
+		}
+	};
+
+	private void displayLatLng() {
+		i.putExtra("lat", this.lat);
+		i.putExtra("lng", this.lng);
+		sendBroadcast(i);
 	}
 
 }
